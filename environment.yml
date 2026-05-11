@@ -1,0 +1,12 @@
+name: bottle-liquid-yolo
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - pandas
+      - scikit-learn
+      - Pillow
+      - numpy
+      - ultralytics
