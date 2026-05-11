@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Large datasets and generated images
+data/images/*
+data/roi_images/*
+data/multiclass/images/*
+data/multiclass/roi_images/*
+data/combined_multiclass/images/*
+data/combined_multiclass/roi_images/*
+data/combined_multiclass_none_aug/roi_images/*
+
+# Generated annotations and split files
+data/annotations/*.csv
+data/splits/*
+data/splits_multiclass/*
+data/splits_multiclass_combined/*
+data/splits_multiclass_combined_none_aug/*
+
+# Training outputs
+outputs/**/*.pth
+outputs/**/*.pt
+outputs/**/*.onnx
+outputs/**/*.csv
+outputs/**/events.*
+
+# Keep empty directory placeholders
+!.gitkeep
+!data/**/.gitkeep
+!outputs/**/.gitkeep
