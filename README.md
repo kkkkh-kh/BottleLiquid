@@ -352,6 +352,48 @@ python src/train_multiclass.py \
   --early_stop_patience 8
 ```
 
+### 整合 data/data 与 database 标注数据
+
+`data/data` 中的 YOLO 标注含有瓶体框和 `small/none/large/medium` 类别框；`database/label.csv` 已经是项目标准格式。可以将这两组数据整合到当前 none-aug 数据集中，形成最终增强版四分类数据。
+
+```bash
+python src/add_data_database_samples.py \
+  --base_label_csv data/annotations/labels_multiclass_combined_none_aug.csv \
+  --base_roi_dir data/combined_multiclass_none_aug/roi_images \
+  --data_data_dir ../data/data \
+  --database_label_csv ../database/label.csv \
+  --database_image_dir ../database/image \
+  --output_label_csv data/annotations/labels_multiclass_final_aug.csv \
+  --output_roi_dir data/final_multiclass_aug/roi_images
+```
+
+```bash
+python src/split_dataset.py \
+  --label_csv data/annotations/labels_multiclass_final_aug.csv \
+  --output_dir data/splits_multiclass_final_aug \
+  --stratify_col liquid_class \
+  --train_ratio 0.7 \
+  --val_ratio 0.15 \
+  --test_ratio 0.15
+```
+
+训练最终增强版四分类模型：
+
+```bash
+python src/train_multiclass.py \
+  --image_dir data/final_multiclass_aug/roi_images \
+  --label_csv data/annotations/labels_multiclass_final_aug.csv \
+  --train_txt data/splits_multiclass_final_aug/train.txt \
+  --val_txt data/splits_multiclass_final_aug/val.txt \
+  --output_dir outputs/multiclass_resnet18_final_aug \
+  --epochs 50 \
+  --batch_size 8 \
+  --lr 0.001 \
+  --weight_decay 0.0001 \
+  --freeze_backbone \
+  --early_stop_patience 8
+```
+
 ## 说明
 
 - 所有脚本都可以在 CPU 上运行，速度会慢一些。

@@ -22,6 +22,7 @@ data/multiclass/roi_images/*
 data/combined_multiclass/images/*
 data/combined_multiclass/roi_images/*
 data/combined_multiclass_none_aug/roi_images/*
+data/final_multiclass_aug/roi_images/*
 
 # Generated annotations and split files
 data/annotations/*.csv
@@ -29,6 +30,7 @@ data/splits/*
 data/splits_multiclass/*
 data/splits_multiclass_combined/*
 data/splits_multiclass_combined_none_aug/*
+data/splits_multiclass_final_aug/*
 
 # Training outputs
 outputs/**/*.pth
