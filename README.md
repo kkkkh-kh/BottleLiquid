@@ -1,131 +1,198 @@
 # BottleLiquid
 
-用于透明或半透明塑料饮料瓶 ROI 图像的二分类：判断瓶内“无液体 / 有液体”。
+透明/半透明塑料饮料瓶内液体识别项目。项目支持两个任务：
 
-项目默认使用 ImageNet 预训练 ResNet18，并冻结 backbone，只训练最后的全连接分类层。所有脚本都支持命令行参数，路径不写死。
+- 二分类：判断瓶内是否有液体，即 `无液体 / 有液体`
+- 四分类：判断瓶内液体量等级，即 `无 / 少 / 中 / 多`
 
-## 项目结构
+模型默认使用 ImageNet 预训练的 ResNet18，并冻结 backbone，只训练最后的全连接分类层。项目代码只依赖 PyTorch、torchvision、pandas、scikit-learn、Pillow、numpy 等常用库。
+
+## 1. 项目结构
 
 ```text
 BottleLiquid/
 ├── data/
-│   ├── images/
-│   ├── roi_images/
-│   ├── annotations/
-│   │   └── labels.csv
-│   └── splits/
-│       ├── train.txt
-│       ├── val.txt
-│       └── test.txt
+│   └── model_dataset/
+│       ├── annotations/
+│       │   └── labels.csv
+│       ├── roi_images/
+│       │   └── *.jpg / *.jpeg / *.png
+│       └── splits/
+│           ├── train.txt
+│           ├── val.txt
+│           └── test.txt
+│
 ├── src/
-│   ├── crop_roi.py
-│   ├── split_dataset.py
 │   ├── dataset.py
 │   ├── model.py
 │   ├── train_binary.py
 │   ├── evaluate_binary.py
-│   └── predict_one.py
+│   ├── predict_one.py
+│   ├── train_multiclass.py
+│   ├── evaluate_multiclass.py
+│   └── predict_one_multiclass.py
+│
 ├── outputs/
-│   └── binary_resnet18/
 ├── requirements.txt
+├── environment.yml
 └── README.md
 ```
 
-## 1. 安装依赖
+当前最终数据集统一放在：
 
-推荐新建独立环境：
+```text
+data/model_dataset/
+```
+
+训练和测试只需要这一套数据。
+
+## 2. 团队成员如何运行
+
+### 2.1 克隆项目
+
+```bash
+git clone <你的 GitHub 仓库地址>
+cd BottleLiquid
+```
+
+如果仓库外层还有一级目录，例如 `IsThereWater`，则进入：
+
+```bash
+cd IsThereWater/BottleLiquid
+```
+
+后续所有命令都默认在 `BottleLiquid` 目录下执行。
+
+### 2.2 创建 Python 环境
+
+推荐使用 conda：
 
 ```bash
 conda create -n bottle-liquid-yolo python=3.10 pip -y
 conda activate bottle-liquid-yolo
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
 ```
 
-也可以使用 `environment.yml`：
+安装 CPU 版 PyTorch：
 
 ```bash
-conda env create -f environment.yml
-conda activate bottle-liquid-yolo
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 ```
 
-如果你已经在合适的环境中，也可以直接安装：
+安装其他依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-如需 GPU 训练，请根据你的 CUDA 版本安装对应的 PyTorch。
+如果队友有 NVIDIA GPU，可以根据自己的 CUDA 版本安装对应的 PyTorch GPU 版本。
 
-## 2. 准备数据
+## 3. 数据和权重如何放置
 
-将原始图片放到：
+GitHub 仓库建议只上传代码，不上传图片数据和模型权重。数据和权重建议通过网盘共享。
 
-```text
-data/images/
-```
-
-将标注文件放到：
+队友下载数据后，目录应放成这样：
 
 ```text
-data/annotations/labels.csv
+BottleLiquid/
+├── data/
+│   └── model_dataset/
+│       ├── annotations/
+│       │   └── labels.csv
+│       ├── roi_images/
+│       │   └── ...
+│       └── splits/
+│           ├── train.txt
+│           ├── val.txt
+│           └── test.txt
+│
+└── outputs/
+    ├── binary_resnet18_model_dataset/
+    │   └── best_resnet18_binary.pth
+    └── multiclass_resnet18_model_dataset/
+        └── best_resnet18_multiclass.pth
 ```
 
-`labels.csv` 格式如下：
+如果没有权重文件，也可以重新训练生成。
 
-```csv
-filename,xmin,ymin,xmax,ymax,has_liquid,liquid_level,pose,liquid_type,source
-img_0001.jpg,120,80,460,900,1,small,upright,water,self-shot
-img_0002.jpg,90,140,520,760,0,none,horizontal,none,self-shot
-img_0003.jpg,70,60,510,900,1,large,tilted,tea,self-shot
+## 4. 数据集说明
+
+最终整理后的数据集位于：
+
+```text
+data/model_dataset/
 ```
 
-其中 `has_liquid=0` 表示无液体，`has_liquid=1` 表示有液体。
+总样本数：
 
-## 3. 划分数据集
-
-如果你的图片已经按文件夹放在项目外部的 `../data` 中，也可以先用预训练 YOLO 自动生成瓶体框标注：
-
-```bash
-python src/auto_annotate_yolo.py \
-  --input_dir ../data \
-  --image_output_dir data/images \
-  --label_csv data/annotations/labels.csv \
-  --model yolov8n.pt
+```text
+1442 张 ROI 图片
 ```
 
-脚本会递归读取 `--input_dir` 下的图片，将图片复制到 `data/images`，并生成符合本项目格式的 `labels.csv`。其中瓶体框来自 YOLO 检测，`has_liquid/liquid_level` 会根据上级文件夹名做弱标签推断，仍建议人工复核。
+类别定义：
 
-```bash
-python src/split_dataset.py \
-  --label_csv data/annotations/labels.csv \
-  --output_dir data/splits
+```text
+二分类 has_liquid:
+0 = 无液体
+1 = 有液体
+
+四分类 liquid_class:
+0 = none   无
+1 = small  少
+2 = medium 中
+3 = large  多
 ```
 
-默认按 `0.7/0.15/0.15` 划分 train/val/test，并尽量按 `has_liquid` 分层抽样。
+四分类数量分布：
 
-## 4. 裁剪 ROI
-
-```bash
-python src/crop_roi.py \
-  --image_dir data/images \
-  --label_csv data/annotations/labels.csv \
-  --output_dir data/roi_images
+```text
+large:   540
+medium:  379
+none:    324
+small:   199
 ```
 
-默认会将标注框四周扩展 `0.05`，并自动防止越界。可通过 `--expand_ratio` 修改。
+二分类数量分布：
 
-## 5. 训练模型
+```text
+有液体: 1118
+无液体:  324
+```
+
+数据划分：
+
+```text
+train: 1009
+val:    216
+test:   217
+```
+
+`labels.csv` 字段说明：
+
+```text
+filename,xmin,ymin,xmax,ymax,has_liquid,liquid_level,liquid_class,pose,liquid_type,source
+```
+
+其中：
+
+- `filename`：对应 `roi_images/` 下的 ROI 图片文件名
+- `has_liquid`：二分类标签，`0` 无液体，`1` 有液体
+- `liquid_level`：四分类文本标签，`none/small/medium/large`
+- `liquid_class`：四分类数字标签，`0/1/2/3`
+- `source`：样本来源，用于追溯
+- `xmin,ymin,xmax,ymax`：保留的框字段，用于兼容和追溯；当前模型直接读取 ROI 图片，不再重新裁剪
+
+## 5. 二分类：判断有无液体
+
+### 5.1 训练
 
 ```bash
 python src/train_binary.py \
-  --image_dir data/roi_images \
-  --label_csv data/annotations/labels.csv \
-  --train_txt data/splits/train.txt \
-  --val_txt data/splits/val.txt \
-  --output_dir outputs/binary_resnet18 \
-  --epochs 30 \
+  --image_dir data/model_dataset/roi_images \
+  --label_csv data/model_dataset/annotations/labels.csv \
+  --train_txt data/model_dataset/splits/train.txt \
+  --val_txt data/model_dataset/splits/val.txt \
+  --output_dir outputs/binary_resnet18_model_dataset \
+  --epochs 50 \
   --batch_size 8 \
   --lr 0.001 \
   --weight_decay 0.0001 \
@@ -133,47 +200,67 @@ python src/train_binary.py \
   --early_stop_patience 8
 ```
 
-输出文件：
+Windows PowerShell 可以使用：
+
+```powershell
+python src/train_binary.py `
+  --image_dir data/model_dataset/roi_images `
+  --label_csv data/model_dataset/annotations/labels.csv `
+  --train_txt data/model_dataset/splits/train.txt `
+  --val_txt data/model_dataset/splits/val.txt `
+  --output_dir outputs/binary_resnet18_model_dataset `
+  --epochs 50 `
+  --batch_size 8 `
+  --lr 0.001 `
+  --weight_decay 0.0001 `
+  --freeze_backbone `
+  --early_stop_patience 8
+```
+
+输出：
 
 ```text
-outputs/binary_resnet18/best_resnet18_binary.pth
-outputs/binary_resnet18/train_log.csv
+outputs/binary_resnet18_model_dataset/best_resnet18_binary.pth
+outputs/binary_resnet18_model_dataset/train_log.csv
 ```
 
-如果希望微调整个 ResNet18，可使用：
+### 5.2 测试
 
-```bash
-python src/train_binary.py ... --no_freeze_backbone
+```powershell
+python src/evaluate_binary.py `
+  --image_dir data/model_dataset/roi_images `
+  --label_csv data/model_dataset/annotations/labels.csv `
+  --test_txt data/model_dataset/splits/test.txt `
+  --checkpoint outputs/binary_resnet18_model_dataset/best_resnet18_binary.pth `
+  --output_dir outputs/binary_resnet18_model_dataset
 ```
 
-## 6. 测试模型
+输出指标包括：
 
-```bash
-python src/evaluate_binary.py \
-  --image_dir data/roi_images \
-  --label_csv data/annotations/labels.csv \
-  --test_txt data/splits/test.txt \
-  --checkpoint outputs/binary_resnet18/best_resnet18_binary.pth \
-  --output_dir outputs/binary_resnet18
+```text
+Accuracy
+Precision
+Recall
+F1-score
+Confusion Matrix
+classification_report
 ```
-
-评估脚本会输出 Accuracy、Precision、Recall、F1-score、Confusion Matrix 和 classification_report。
 
 逐样本预测结果保存到：
 
 ```text
-outputs/binary_resnet18/test_result.csv
+outputs/binary_resnet18_model_dataset/test_result.csv
 ```
 
-## 7. 单张图片预测
+### 5.3 单张图片预测
 
-```bash
-python src/predict_one.py \
-  --image_path data/roi_images/img_0001.jpg \
-  --checkpoint outputs/binary_resnet18/best_resnet18_binary.pth
+```powershell
+python src/predict_one.py `
+  --image_path data/model_dataset/roi_images/your_image.jpg `
+  --checkpoint outputs/binary_resnet18_model_dataset/best_resnet18_binary.pth
 ```
 
-输出包括：
+输出：
 
 ```text
 预测类别：无液体 / 有液体
@@ -181,222 +268,142 @@ prob_no_liquid
 prob_has_liquid
 ```
 
-## 8. 四分类液体量识别
+## 6. 四分类：判断无 / 少 / 中 / 多
 
-如果需要识别 `无 / 少 / 中 / 多` 四类，可使用 Roboflow COCO 标注中的瓶体和液体区域生成四分类标签。
+### 6.1 训练
 
-类别编号如下：
+```powershell
+python src/train_multiclass.py `
+  --image_dir data/model_dataset/roi_images `
+  --label_csv data/model_dataset/annotations/labels.csv `
+  --train_txt data/model_dataset/splits/train.txt `
+  --val_txt data/model_dataset/splits/val.txt `
+  --output_dir outputs/multiclass_resnet18_model_dataset `
+  --epochs 50 `
+  --batch_size 8 `
+  --lr 0.001 `
+  --weight_decay 0.0001 `
+  --freeze_backbone `
+  --early_stop_patience 8
+```
+
+输出：
 
 ```text
-0: none   无
-1: small  少
-2: medium 中
-3: large  多
+outputs/multiclass_resnet18_model_dataset/best_resnet18_multiclass.pth
+outputs/multiclass_resnet18_model_dataset/train_log_multiclass.csv
 ```
 
-默认按 `液体区域面积 / 瓶体区域面积` 生成弱标签：
+### 6.2 测试
+
+```powershell
+python src/evaluate_multiclass.py `
+  --image_dir data/model_dataset/roi_images `
+  --label_csv data/model_dataset/annotations/labels.csv `
+  --test_txt data/model_dataset/splits/test.txt `
+  --checkpoint outputs/multiclass_resnet18_model_dataset/best_resnet18_multiclass.pth `
+  --output_dir outputs/multiclass_resnet18_model_dataset
+```
+
+输出指标包括：
 
 ```text
-ratio = 0              -> none
-0 < ratio < 0.25      -> small
-0.25 <= ratio < 0.60  -> medium
-ratio >= 0.60         -> large
+Accuracy
+Macro Precision
+Macro Recall
+Macro F1-score
+Confusion Matrix
+classification_report
 ```
 
-生成四分类标注：
+逐样本预测结果保存到：
+
+```text
+outputs/multiclass_resnet18_model_dataset/test_result_multiclass.csv
+```
+
+### 6.3 单张图片预测
+
+```powershell
+python src/predict_one_multiclass.py `
+  --image_path data/model_dataset/roi_images/your_image.jpg `
+  --checkpoint outputs/multiclass_resnet18_model_dataset/best_resnet18_multiclass.pth
+```
+
+输出：
+
+```text
+预测类别：无 / 少 / 中 / 多
+prob_none
+prob_small
+prob_medium
+prob_large
+```
+
+## 7. 常见问题
+
+### 7.1 找不到数据
+
+确认以下路径存在：
+
+```text
+data/model_dataset/annotations/labels.csv
+data/model_dataset/roi_images/
+data/model_dataset/splits/train.txt
+data/model_dataset/splits/val.txt
+data/model_dataset/splits/test.txt
+```
+
+### 7.2 找不到模型权重
+
+如果运行测试或单图预测，需要先准备 checkpoint：
+
+```text
+outputs/binary_resnet18_model_dataset/best_resnet18_binary.pth
+outputs/multiclass_resnet18_model_dataset/best_resnet18_multiclass.pth
+```
+
+如果没有权重文件，请先运行训练命令。
+
+### 7.3 当前目录错误
+
+所有命令应在 `BottleLiquid` 目录下执行。可以用下面命令检查：
 
 ```bash
-python src/prepare_multiclass_from_coco.py \
-  --coco_json ../data/train/_annotations.coco.json \
-  --source_image_dir ../data/train \
-  --output_image_dir data/multiclass/images \
-  --label_csv data/annotations/labels_multiclass.csv \
-  --debug_csv data/annotations/labels_multiclass_debug.csv
+pwd
 ```
 
-划分四分类数据集：
+当前目录中应该能看到：
 
-```bash
-python src/split_dataset.py \
-  --label_csv data/annotations/labels_multiclass.csv \
-  --output_dir data/splits_multiclass \
-  --stratify_col liquid_class
+```text
+src/
+data/
+requirements.txt
+README.md
 ```
 
-裁剪四分类 ROI：
+### 7.4 CPU 运行较慢
 
-```bash
-python src/crop_roi.py \
-  --image_dir data/multiclass/images \
-  --label_csv data/annotations/labels_multiclass.csv \
-  --output_dir data/multiclass/roi_images
+项目可以在 CPU 上运行，只是训练会较慢。若有 GPU，请安装对应 CUDA 版 PyTorch。
+
+## 8. GitHub 上传建议
+
+建议上传：
+
+```text
+src/
+README.md
+requirements.txt
+environment.yml
+.gitignore
 ```
 
-训练四分类模型：
+不建议上传：
 
-```bash
-python src/train_multiclass.py \
-  --image_dir data/multiclass/roi_images \
-  --label_csv data/annotations/labels_multiclass.csv \
-  --train_txt data/splits_multiclass/train.txt \
-  --val_txt data/splits_multiclass/val.txt \
-  --output_dir outputs/multiclass_resnet18 \
-  --epochs 30 \
-  --batch_size 8 \
-  --lr 0.001 \
-  --weight_decay 0.0001 \
-  --freeze_backbone \
-  --early_stop_patience 8
+```text
+data/model_dataset/roi_images/
+outputs/**/*.pth
+outputs/**/*.csv
 ```
 
-测试四分类模型：
-
-```bash
-python src/evaluate_multiclass.py \
-  --image_dir data/multiclass/roi_images \
-  --label_csv data/annotations/labels_multiclass.csv \
-  --test_txt data/splits_multiclass/test.txt \
-  --checkpoint outputs/multiclass_resnet18/best_resnet18_multiclass.pth \
-  --output_dir outputs/multiclass_resnet18
-```
-
-单张 ROI 四分类预测：
-
-```bash
-python src/predict_one_multiclass.py \
-  --image_path data/multiclass/roi_images/your_image.jpg \
-  --checkpoint outputs/multiclass_resnet18/best_resnet18_multiclass.pth
-```
-
-### 整合弱标签数据扩充四分类
-
-除了 COCO 标注数据，也可以把 `Full Water level / Half water level / Overflowing` 文件夹经 YOLO 得到的弱标签数据整合进四分类训练集。该方式会增加数据量，但标签噪声更大，建议和 COCO-only 结果对比。
-
-```bash
-python src/combine_multiclass_datasets.py \
-  --coco_label_csv data/annotations/labels_multiclass.csv \
-  --coco_image_dir data/multiclass/images \
-  --weak_label_csv data/annotations/labels.csv \
-  --weak_image_dir data/images \
-  --output_image_dir data/combined_multiclass/images \
-  --output_label_csv data/annotations/labels_multiclass_combined.csv
-```
-
-```bash
-python src/split_dataset.py \
-  --label_csv data/annotations/labels_multiclass_combined.csv \
-  --output_dir data/splits_multiclass_combined \
-  --stratify_col liquid_class
-```
-
-```bash
-python src/crop_roi.py \
-  --image_dir data/combined_multiclass/images \
-  --label_csv data/annotations/labels_multiclass_combined.csv \
-  --output_dir data/combined_multiclass/roi_images
-```
-
-训练 combined 四分类模型：
-
-```bash
-python src/train_multiclass.py \
-  --image_dir data/combined_multiclass/roi_images \
-  --label_csv data/annotations/labels_multiclass_combined.csv \
-  --train_txt data/splits_multiclass_combined/train.txt \
-  --val_txt data/splits_multiclass_combined/val.txt \
-  --output_dir outputs/multiclass_resnet18_combined \
-  --epochs 30 \
-  --batch_size 8 \
-  --lr 0.001 \
-  --weight_decay 0.0001 \
-  --freeze_backbone \
-  --early_stop_patience 8
-```
-
-### 加入人工确认的 newtrashy 空瓶样本
-
-如果人工审查认为 `newtrashy` 中的瓶体实例可作为空瓶样本，可随机抽取一部分加入 `none` 类。建议先少量加入，例如 150 个 ROI，避免空瓶域过强导致模型偏移。
-
-```bash
-python src/add_newtrashy_none_samples.py \
-  --base_label_csv data/annotations/labels_multiclass_combined.csv \
-  --base_roi_dir data/combined_multiclass/roi_images \
-  --newtrashy_dir ../newtrashy \
-  --output_label_csv data/annotations/labels_multiclass_combined_none_aug.csv \
-  --output_roi_dir data/combined_multiclass_none_aug/roi_images \
-  --num_samples 150 \
-  --seed 42
-```
-
-```bash
-python src/split_dataset.py \
-  --label_csv data/annotations/labels_multiclass_combined_none_aug.csv \
-  --output_dir data/splits_multiclass_combined_none_aug \
-  --stratify_col liquid_class
-```
-
-训练 none-aug 四分类模型：
-
-```bash
-python src/train_multiclass.py \
-  --image_dir data/combined_multiclass_none_aug/roi_images \
-  --label_csv data/annotations/labels_multiclass_combined_none_aug.csv \
-  --train_txt data/splits_multiclass_combined_none_aug/train.txt \
-  --val_txt data/splits_multiclass_combined_none_aug/val.txt \
-  --output_dir outputs/multiclass_resnet18_combined_none_aug \
-  --epochs 50 \
-  --batch_size 8 \
-  --lr 0.001 \
-  --weight_decay 0.0001 \
-  --freeze_backbone \
-  --early_stop_patience 8
-```
-
-### 整合 data/data 与 database 标注数据
-
-`data/data` 中的 YOLO 标注含有瓶体框和 `small/none/large/medium` 类别框；`database/label.csv` 已经是项目标准格式。可以将这两组数据整合到当前 none-aug 数据集中，形成最终增强版四分类数据。
-
-```bash
-python src/add_data_database_samples.py \
-  --base_label_csv data/annotations/labels_multiclass_combined_none_aug.csv \
-  --base_roi_dir data/combined_multiclass_none_aug/roi_images \
-  --data_data_dir ../data/data \
-  --database_label_csv ../database/label.csv \
-  --database_image_dir ../database/image \
-  --output_label_csv data/annotations/labels_multiclass_final_aug.csv \
-  --output_roi_dir data/final_multiclass_aug/roi_images
-```
-
-```bash
-python src/split_dataset.py \
-  --label_csv data/annotations/labels_multiclass_final_aug.csv \
-  --output_dir data/splits_multiclass_final_aug \
-  --stratify_col liquid_class \
-  --train_ratio 0.7 \
-  --val_ratio 0.15 \
-  --test_ratio 0.15
-```
-
-训练最终增强版四分类模型：
-
-```bash
-python src/train_multiclass.py \
-  --image_dir data/final_multiclass_aug/roi_images \
-  --label_csv data/annotations/labels_multiclass_final_aug.csv \
-  --train_txt data/splits_multiclass_final_aug/train.txt \
-  --val_txt data/splits_multiclass_final_aug/val.txt \
-  --output_dir outputs/multiclass_resnet18_final_aug \
-  --epochs 50 \
-  --batch_size 8 \
-  --lr 0.001 \
-  --weight_decay 0.0001 \
-  --freeze_backbone \
-  --early_stop_patience 8
-```
-
-## 说明
-
-- 所有脚本都可以在 CPU 上运行，速度会慢一些。
-- 首次构建 ResNet18 会下载 ImageNet 预训练权重，需要联网。
-- 如果图片、标注列、split 文件或 checkpoint 缺失，脚本会给出明确报错。
-- 本任务只训练二分类标签 `has_liquid`，`liquid_level`、`pose`、`liquid_type` 等字段暂时保留，不参与训练。
+数据和模型权重建议通过网盘共享，并在 README 或团队文档中说明下载链接和放置路径。

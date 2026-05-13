@@ -23,6 +23,10 @@ data/combined_multiclass/images/*
 data/combined_multiclass/roi_images/*
 data/combined_multiclass_none_aug/roi_images/*
 data/final_multiclass_aug/roi_images/*
+data/unified_dataset/images/*
+data/unified_dataset/roi_images/*
+data/unified_dataset/annotations/*.csv
+data/unified_dataset/splits/*
 
 # Generated annotations and split files
 data/annotations/*.csv
