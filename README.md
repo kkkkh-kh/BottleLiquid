@@ -5,24 +5,36 @@
 - 二分类：判断瓶内是否有液体，即 `无液体 / 有液体`
 - 四分类：判断瓶内液体量等级，即 `无 / 少 / 中 / 多`
 
-模型默认使用 ImageNet 预训练的 ResNet18，并冻结 backbone，只训练最后的全连接分类层。项目代码只依赖 PyTorch、torchvision、pandas、scikit-learn、Pillow、numpy 等常用库。
+分类模型默认使用 ImageNet 预训练的 ResNet18，并冻结 backbone，只训练最后的全连接分类层。项目也提供独立的 YOLO 瓶体检测组件，用于学习瓶体位置并为分类模型裁剪统一 ROI。
 
 ## 1. 项目结构
 
 ```text
 BottleLiquid/
 ├── data/
-│   └── model_dataset/
-│       ├── annotations/
-│       │   └── labels.csv
+│   ├── model_dataset/
+│   │   ├── annotations/
+│   │   │   └── labels.csv
+│   │   ├── roi_images/
+│   │   │   └── *.jpg / *.jpeg / *.png
+│   │   └── splits/
+│   │       ├── train.txt
+│   │       ├── val.txt
+│   │       └── test.txt
+│   ├── bottle_detection/
+│   │   ├── images/train, val, test
+│   │   ├── labels/train, val, test
+│   │   └── data.yaml
+│   └── detector_roi_dataset/
+│       ├── annotations/labels.csv
 │       ├── roi_images/
-│       │   └── *.jpg / *.jpeg / *.png
 │       └── splits/
-│           ├── train.txt
-│           ├── val.txt
-│           └── test.txt
 │
 ├── src/
+│   ├── detection/
+│   │   ├── prepare_newtrashy_bottle_dataset.py
+│   │   ├── train_bottle_detector.py
+│   │   └── crop_roi_with_detector.py
 │   ├── dataset.py
 │   ├── model.py
 │   ├── train_binary.py
@@ -33,6 +45,7 @@ BottleLiquid/
 │   └── predict_one_multiclass.py
 │
 ├── outputs/
+│   └── bottle_detector/
 ├── requirements.txt
 ├── environment.yml
 └── README.md
@@ -340,9 +353,115 @@ prob_medium
 prob_large
 ```
 
-## 7. 常见问题
+## 7. 瓶体检测组件
 
-### 7.1 找不到数据
+该组件用于先训练一个单类别 `bottle` 检测器，再用检测框裁剪统一 ROI。它是独立模块，不会替代或修改现有 ResNet 二分类、四分类训练流程；分类脚本仍然通过 `--image_dir`、`--label_csv` 和 split txt 读取数据。
+
+### 7.1 用 newtrashy 生成单类瓶体检测数据集
+
+`../newtrashy/` 是 Roboflow YOLO 检测数据集，原始类别包含多种瓶型。为了训练统一的瓶体位置检测器，脚本会把所有原始类别统一重映射为：
+
+```text
+0 = bottle
+```
+
+生成单类别 YOLO 数据集：
+
+```powershell
+python src/detection/prepare_newtrashy_bottle_dataset.py `
+  --source_dir ../newtrashy `
+  --output_dir data/bottle_detection
+```
+
+输出结构为：
+
+```text
+data/bottle_detection/
+├── images/train, val, test
+├── labels/train, val, test
+└── data.yaml
+```
+
+其中 `newtrashy/valid` 会映射为 YOLO 常用的 `val`。
+
+### 7.2 训练瓶体检测器
+
+默认使用 `yolov8n.pt` 作为预训练权重：
+
+```powershell
+python src/detection/train_bottle_detector.py `
+  --data_yaml data/bottle_detection/data.yaml `
+  --model yolov8n.pt `
+  --epochs 50 `
+  --imgsz 640 `
+  --batch 8 `
+  --project outputs/bottle_detector `
+  --name yolov8n_bottle
+```
+
+训练完成后，最佳权重通常位于：
+
+```text
+outputs/bottle_detector/yolov8n_bottle/weights/best.pt
+```
+
+CPU 可以运行，但 YOLO 训练会比较慢；如果有 NVIDIA GPU，可以通过 `--device 0` 指定 GPU。
+
+### 7.3 使用检测器裁剪统一 ROI
+
+```powershell
+python src/detection/crop_roi_with_detector.py `
+  --image_dir data/model_dataset/roi_images `
+  --label_csv data/model_dataset/annotations/labels.csv `
+  --checkpoint outputs/bottle_detector/yolov8n_bottle/weights/best.pt `
+  --output_roi_dir data/detector_roi_dataset/roi_images `
+  --output_label_csv data/detector_roi_dataset/annotations/labels.csv `
+  --split_dir data/model_dataset/splits `
+  --output_split_dir data/detector_roi_dataset/splits `
+  --conf 0.25 `
+  --imgsz 640 `
+  --expand_ratio 0.05
+```
+
+默认情况下，如果某张图片没有检测到 bottle，会跳过该图片，并同步生成过滤后的 split 文件。若希望无检测结果时使用整图作为 ROI，可以加上：
+
+```powershell
+--fallback_full_image
+```
+
+生成的 `labels.csv` 字段保持为：
+
+```text
+filename,xmin,ymin,xmax,ymax,has_liquid,liquid_level,liquid_class,pose,liquid_type,source
+```
+
+### 7.4 使用统一 ROI 继续训练分类模型
+
+二分类：
+
+```powershell
+python src/train_binary.py `
+  --image_dir data/detector_roi_dataset/roi_images `
+  --label_csv data/detector_roi_dataset/annotations/labels.csv `
+  --train_txt data/detector_roi_dataset/splits/train.txt `
+  --val_txt data/detector_roi_dataset/splits/val.txt `
+  --output_dir outputs/binary_resnet18_detector_roi
+```
+
+四分类：
+
+```powershell
+python src/train_multiclass.py `
+  --image_dir data/detector_roi_dataset/roi_images `
+  --label_csv data/detector_roi_dataset/annotations/labels.csv `
+  --train_txt data/detector_roi_dataset/splits/train.txt `
+  --val_txt data/detector_roi_dataset/splits/val.txt `
+  --output_dir outputs/multiclass_resnet18_detector_roi
+```
+
+## 8. 常见问题
+
+### 8.1 找不到数据
 
 确认以下路径存在：
 
@@ -354,7 +473,7 @@ data/model_dataset/splits/val.txt
 data/model_dataset/splits/test.txt
 ```
 
-### 7.2 找不到模型权重
+### 8.2 找不到模型权重
 
 如果运行测试或单图预测，需要先准备 checkpoint：
 
@@ -365,7 +484,7 @@ outputs/multiclass_resnet18_model_dataset/best_resnet18_multiclass.pth
 
 如果没有权重文件，请先运行训练命令。
 
-### 7.3 当前目录错误
+### 8.3 当前目录错误
 
 所有命令应在 `BottleLiquid` 目录下执行。可以用下面命令检查：
 
@@ -382,11 +501,11 @@ requirements.txt
 README.md
 ```
 
-### 7.4 CPU 运行较慢
+### 8.4 CPU 运行较慢
 
 项目可以在 CPU 上运行，只是训练会较慢。若有 GPU，请安装对应 CUDA 版 PyTorch。
 
-## 8. GitHub 上传建议
+## 9. GitHub 上传建议
 
 建议上传：
 

@@ -27,6 +27,12 @@ data/unified_dataset/images/*
 data/unified_dataset/roi_images/*
 data/unified_dataset/annotations/*.csv
 data/unified_dataset/splits/*
+data/bottle_detection/images/*
+data/bottle_detection/labels/*
+data/bottle_detection/data.yaml
+data/detector_roi_dataset/roi_images/*
+data/detector_roi_dataset/annotations/*.csv
+data/detector_roi_dataset/splits/*
 
 # Generated annotations and split files
 data/annotations/*.csv
