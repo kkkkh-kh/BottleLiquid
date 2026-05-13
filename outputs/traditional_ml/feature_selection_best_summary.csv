@@ -1,0 +1,5 @@
+﻿experiment,selection_metric,task,feature_set,n_features,model,accuracy,precision,recall,f1,auc,ap,macro_f1,weighted_f1,method,candidate,base_features,selector_param,ranker,cv_score
+binary_optimized,f1,binary,stat_color_edge_line,140,svm_rbf_tuned,0.9308755760368664,0.9526627218934912,0.9583333333333334,0.9554896142433236,0.9444849368318756,0.9800635504444942,,,,,,,,
+level_optimized,macro_f1,level,stat_color_edge_f_classif_k128,128,svm_rbf_tuned,0.783410138248848,,,,,,0.7709528578796367,0.7854201303729814,,,,,,
+binary_advanced,f1,binary,,140,,0.9308755760368664,0.9526627218934912,0.9583333333333334,0.9554896142433236,0.9441205053449953,0.979962718353803,,,pca,pca_stat_color_edge_line_96,stat_color_edge_line,96.0,,
+level_advanced,macro_f1,level,,128,,0.7695852534562212,,,,,,0.7591974213983783,0.7729602290491316,cv_kbest,cv_kbest_mutual_info_stat_color_edge_line_k128,stat_color_edge_line,128.0,,0.6658227491077952

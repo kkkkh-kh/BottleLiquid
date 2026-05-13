@@ -1,0 +1,12 @@
+{
+  "include": ["src"],
+  "exclude": [
+    "**/._*.py",
+    ".venv_pkgs",
+    "data",
+    "outputs"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11"
+}

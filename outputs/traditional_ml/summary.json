@@ -1,0 +1,33 @@
+{
+  "n_samples_in_labels": 1442,
+  "n_roi_files_found": 1442,
+  "binary_distribution": {
+    "0": 324,
+    "1": 1118
+  },
+  "level_distribution": {
+    "large": 540,
+    "medium": 379,
+    "none": 324,
+    "small": 199
+  },
+  "usable_samples": 1442,
+  "skipped_samples": [],
+  "feature_dim": 2318,
+  "feature_group_dims": {
+    "gray": 52,
+    "hsv": 40,
+    "edge": 39,
+    "line": 9,
+    "adaptive_line": 36,
+    "grid": 162,
+    "hog": 1980
+  },
+  "train_size": 1225,
+  "test_size": 217,
+  "best_binary_model": "xgboost",
+  "best_level_model": "svm_rbf",
+  "best_binary_ensemble": "stat_color_edge_line_grid_raw_svm0.75_xgb0.25",
+  "best_level_ensemble": "stat_color_edge_raw_svm0.75_xgb0.25",
+  "elapsed_seconds": 309.85
+}
