@@ -1,139 +1,235 @@
-# BottleLiquid
+# 传统机器学习模型结果说明
 
-## 基于人工特征的传统机器学习建模说明
+## 1. 任务说明
 
-本目录提供不使用 CNN 的瓶内残留液体识别实验代码，覆盖二分类和四分类。
+本部分使用人工特征，不使用 CNN 特征。任务包括：
 
-### 一键实验
+- 二分类：判断瓶内是否有液体。
+- 普通四分类：判断液体等级为 `无 / 少量 / 中等 / 较多`。
+- 有序四分类：利用 `无 < 少量 < 中等 < 较多` 的等级顺序进行分类。
 
-使用现有 ROI，并按四分类标签分层抽样划分训练集/测试集：
+数据集共 `1442` 张 ROI 可用图片，严格测试集共 `217` 张图片。
 
-```bash
-python3 src/traditional_ml_liquid.py
-```
+## 2. 标签定义
 
-使用数据集中已有 train/val/test 划分：
-
-```bash
-python3 src/traditional_ml_liquid.py --use-existing-splits
-```
-
-输出目录：
-
-```text
-outputs/traditional_ml/
-```
-
-主要结果文件：
-
-- `summary.json`：标签校验、样本数、特征维度、最优模型摘要
-- `labels_validated.csv`：校验后的标签文件，确保 `has_liquid` 与 `liquid_level/liquid_class` 一致
-- `binary_model_comparison.csv`：Logistic、SVM、随机森林、GBDT/XGBoost 的二分类指标
-- `level_model_comparison.csv`：四分类模型和两阶段模型指标
-- `feature_ablation.csv`：单特征与融合特征的消融实验
-- `binary_svm_xgboost_ensemble.csv`：二分类 SVM + XGBoost 概率融合实验结果
-- `level_svm_xgboost_ensemble.csv`：四分类 SVM + XGBoost 概率融合实验结果
-- `binary_cm_*.csv`：二分类混淆矩阵
-- `level_cm_*.csv`：四分类混淆矩阵
-- `error_samples.csv`：错误样本清单，并提示从反光、标签遮挡、透明液体、横放、复杂背景等角度复核
-
-### 特征设计
-
-程序提取七类人工特征并拼接为融合特征向量：
-
-1. 灰度统计特征：全局、上下半区、左右半区、下半中心区域的均值、标准差、分位数和上下差异。
-2. HSV 颜色直方图特征：H/S/V 通道直方图，以及上下半区饱和度、亮度差异。
-3. 边缘密度特征：Sobel 梯度在不同阈值和不同区域中的密度，反映瓶壁、水体边界和纹理强度。
-4. 水平液面线特征：在瓶体中心区域搜索水平梯度峰值，记录候选液面位置、强度、上下灰度差。
-5. HOG 特征：统计局部梯度方向分布，描述瓶体内部纹理和边界形态。
-
-6. 3x3 区域统计特征：将瓶体 ROI 划分为九宫格，对每个区域分别计算灰度统计、HSV 均值/标准差、边缘密度和梯度统计，用于描述液体在局部空间中的分布差异。
-7. 姿态自适应液面线特征：将 ROI 按多个角度旋转，分别搜索候选液面线，并记录最强响应角度、位置、强度和上下灰度差，使液面线特征对倾斜、横放等姿态更鲁棒。
-
-当前完整特征维度为：
-
-```text
-gray: 52
-hsv: 40
-edge: 39
-line: 9
-adaptive_line: 36
-grid: 162
-hog: 1980
-total: 2318
-```
-
-### 标签
-
-二分类：
+二分类标签：
 
 ```text
 0 = 无液体
 1 = 有液体
 ```
 
-四分类：
+四分类标签：
 
 ```text
-0 = none
-1 = small
-2 = medium
-3 = large
+none   = 无
+small  = 少量
+medium = 中等
+large  = 较多
 ```
 
-### 论文建模表述建议
-
-可将算法流程写为：
-
-ROI 裁剪 -> 尺寸归一化与中值滤波 -> RGB/灰度/HSV 颜色空间转换 -> 人工特征提取 -> 特征向量标准化 -> 分类器训练与模型选择 -> SVM/XGBoost 概率融合。
-
-四分类推广建议采用两阶段模型：
-
-第一阶段判断是否有液体；第二阶段仅对有液体样本判断 `small/medium/large`。这种设计能降低空瓶与液体等级之间的耦合错误，更适合小样本和类别不均衡场景。
-
-### 概率融合实验
-
-程序还实现了 SVM + XGBoost 概率融合：
+数据集类别分布：
 
 ```text
-P = w * P_svm + (1 - w) * P_xgboost
+无:   324
+少量: 199
+中等: 379
+较多: 540
 ```
 
-其中 `w` 在 0.25、0.40、0.50、0.60、0.75 中搜索。二分类按 F1 选择最优融合方案，四分类按 Macro F1 选择最优融合方案。
+## 3. 模型与特征
 
-融合实验会比较多个有效特征组合：
+传统模型使用的人工特征包括：
+
+- 灰度统计特征 `gray`
+- HSV 颜色直方图特征 `hsv`
+- 边缘密度特征 `edge`
+- 水平液面线特征 `line`
+- 多角度自适应液面线特征 `adaptive_line`
+- 3x3 区域统计特征 `grid`
+- 液体含量特征 `amount`
+- 标签/反光干扰特征 `artifact`
+- 姿态归一化特征 `pose_norm`
+- HOG 特征 `hog`
+
+最终用于报告的历史最高准确率模型如下：
+
+| 任务 | 特征组合 | 模型 | 测试集 Accuracy | 主要指标 |
+|---|---|---|---:|---:|
+| 二分类 | `stat_color_edge_adaptive` | `0.60*SVM + 0.40*XGBoost` | 0.9355 | F1 = 0.9595 |
+| 普通四分类 | `stat_color_edge_adaptive` | `0.75*SVM + 0.25*XGBoost` | 0.7742 | Macro F1 = 0.7434 |
+| 有序四分类 | `stat_color_edge_amount_artifact` | 有序 `0.50*SVM + 0.50*XGBoost` | 0.7696 | Macro F1 = 0.7558 |
+
+## 4. 文件说明
+
+### 核心汇总表
+
+| 文件 | 含义 | 主要用途 |
+|---|---|---|
+| `traditional_model_results.xlsx` | 多个结果表的 Excel 汇总工作簿 | 提交支撑材料、集中查看结果 |
+| `labels.csv` | 每张图片的真实标签信息 | 画数据集类别分布图 |
+| `class_distribution.csv` | 四分类类别数量统计 | 画类别分布柱状图 |
+| `metrics_summary.csv` | 三种传统模型的总体指标 | 画模型指标柱状图 |
+| `predictions.csv` | 测试集逐样本预测结果汇总 | 计算混淆矩阵、查错样本 |
+| `inference_time.csv` | 每张测试图的推理耗时 | 画推理时间分布图 |
+| `inference_time_summary.csv` | 推理时间均值、最大值、最小值 | 画平均推理时间对比图 |
+
+### 单独预测结果表
+
+| 文件 | 含义 |
+|---|---|
+| `predictions_traditional_binary.csv` | 二分类传统模型逐样本预测结果 |
+| `predictions_traditional_level.csv` | 普通四分类传统模型逐样本预测结果 |
+| `predictions_traditional_ordinal.csv` | 有序四分类传统模型逐样本预测结果 |
+
+### 混淆矩阵
+
+| 文件 | 含义 |
+|---|---|
+| `confusion_matrix_binary_traditional.csv` | 二分类混淆矩阵 |
+| `confusion_matrix_level_traditional.csv` | 普通四分类混淆矩阵 |
+| `confusion_matrix_level_ordinal.csv` | 有序四分类混淆矩阵 |
+
+### 场景/姿态统计
+
+| 文件 | 含义 |
+|---|---|
+| `pose_distribution.csv` | 姿态标签数量统计 |
+| `performance_by_pose_scene.csv` | 按 `pose` 和 `scene/source` 分组的模型准确率 |
+
+说明：当前数据中的 `pose` 基本为 `unknown`，因此姿态分组图参考价值有限；`scene` 是根据原始 `source` 字段派生的来源分组，并非人工场景标注。
+
+## 5. Excel 工作簿说明
+
+`traditional_model_results.xlsx` 包含以下 sheet：
 
 ```text
-gray + hsv + edge
-gray + hsv + edge + line
-gray + hsv + edge + adaptive_line
-gray + hsv + edge + grid
-gray + hsv + edge + line + adaptive_line + grid
+labels
+class_distribution
+metrics_summary
+predictions
+confusion_binary
+confusion_level
+confusion_ordinal
+pose_scene_perf
+inference_time
+inference_summary
 ```
 
-对维度较高的组合，程序会用 `SelectKBest(f_classif)` 筛选 96、128、192、256 维候选特征。
+## 6. 指标结果
 
-对应的最优模型会保存为：
+`metrics_summary.csv` 中记录了三种传统模型在严格测试集上的结果：
 
 ```text
-best_binary_ensemble_*.joblib
-best_level_ensemble_*.joblib
-best_binary_ensemble_*_cols.npy
-best_level_ensemble_*_cols.npy
+二分类:
+Accuracy  = 0.9355
+Precision = 0.9326
+Recall    = 0.9881
+F1        = 0.9595
+
+普通四分类:
+Accuracy  = 0.7742
+Macro F1  = 0.7434
+
+有序四分类:
+Accuracy  = 0.7696
+Macro F1  = 0.7558
 ```
 
-本轮新增特征和融合后的代表结果：
+其中：
+
+- 二分类主要看 `Accuracy / Precision / Recall / F1`。
+- 四分类更推荐看 `Accuracy / Macro F1 / Weighted F1`。
+- `Macro F1` 是四个类别 F1 的算术平均，更能反映少数类 `少量` 的识别情况。
+
+## 7. 混淆矩阵
+
+二分类混淆矩阵：
 
 ```text
-二分类最优融合:
-feature = gray + hsv + edge + adaptive_line
-model = 0.60 * SVM + 0.40 * XGBoost
-Accuracy = 0.9447
-F1 = 0.9651
-
-四分类最优融合:
-feature = gray + hsv + edge + line, SelectKBest(f_classif, k=128)
-model = 0.60 * SVM + 0.40 * XGBoost
-Accuracy = 0.7972
-Macro F1 = 0.7822
+真实\预测  无液体  有液体
+无液体       37     12
+有液体        2    166
 ```
+
+普通四分类混淆矩阵：
+
+```text
+真实\预测   无  少量  中等  较多
+无         42    1    1    5
+少量        3   14    9    4
+中等        1    4   49    3
+较多        3    2   13   63
+```
+
+有序四分类混淆矩阵：
+
+```text
+真实\预测   无  少量  中等  较多
+无         35    5    5    4
+少量        0   24    4    2
+中等        2    8   42    5
+较多        4    3    8   66
+```
+
+## 8. 推理时间
+
+推理时间统计包含 ROI 读取、预处理、人工特征提取和模型预测。单位为毫秒/张。
+
+```text
+二分类传统模型:
+平均 18.46 ms/张
+
+普通四分类传统模型:
+平均 17.51 ms/张
+
+有序四分类传统模型:
+平均 18.21 ms/张
+```
+
+对应文件：
+
+- `inference_time.csv`
+- `inference_time_summary.csv`
+
+## 9. 建议画图清单
+
+可以直接使用本目录中的 CSV 画以下图：
+
+| 图表 | 数据文件 |
+|---|---|
+| 数据集类别分布柱状图 | `class_distribution.csv` |
+| 模型总体指标柱状图 | `metrics_summary.csv` |
+| 二分类混淆矩阵 | `confusion_matrix_binary_traditional.csv` |
+| 普通四分类混淆矩阵 | `confusion_matrix_level_traditional.csv` |
+| 有序四分类混淆矩阵 | `confusion_matrix_level_ordinal.csv` |
+| 测试集逐样本正确/错误分析 | `predictions.csv` |
+| 推理时间对比图 | `inference_time_summary.csv` |
+| 按来源/姿态准确率图 | `performance_by_pose_scene.csv` |
+
+## 10. 复现实验
+
+传统模型主程序位于：
+
+```text
+src/traditional_ml_liquid.py
+```
+
+严格验证实验命令：
+
+```bash
+python3 src/traditional_ml_liquid.py --use-existing-splits --strict-validation --skip-ensemble --save-model
+```
+
+注意：主程序已经将严格验证阶段的三类模型锁定为历史最高准确率候选：
+
+```text
+binary        = stat_color_edge_adaptive_raw_svm0.60_xgb0.40
+level         = stat_color_edge_adaptive_raw_svm0.75_xgb0.25
+level_ordinal = ordinal_stat_color_edge_amount_artifact_raw_small_os_svm0.50_xgb0.50
+```
+
+
+## 11. 备注
+
+本目录没有提供 `level_regression.csv`，因为当前数据没有真实液体占比标注，也没有训练液位比例回归模型。对于本题目前的传统模型部分，使用四分类混淆矩阵比液位回归误差图更稳妥。

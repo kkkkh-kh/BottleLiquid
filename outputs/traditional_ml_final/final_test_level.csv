@@ -1,0 +1,2 @@
+﻿task,candidate,feature_set,selector,n_features,small_oversample,svm_weight,xgb_weight,calibration_type,binary_threshold,class_bias,accuracy,macro_f1,weighted_f1,f1_none,f1_small,f1_medium,f1_large
+level,stat_color_edge_adaptive_raw_svm0.75_xgb0.25,stat_color_edge_adaptive,raw,167,False,0.75,0.25,class_bias,,"[0.8999999761581421, 1.0, 1.100000023841858, 1.0]",0.7741935483870968,0.7433861737897305,0.7704884365887852,0.8571428571428571,0.5490196078431373,0.7596899224806202,0.8076923076923077

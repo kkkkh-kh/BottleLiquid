@@ -1,0 +1,2 @@
+﻿task,candidate,feature_set,selector,n_features,small_oversample,svm_weight,xgb_weight,calibration_type,binary_threshold,class_bias,accuracy,precision,recall,f1,auc,ap
+binary,stat_color_edge_adaptive_raw_svm0.60_xgb0.40,stat_color_edge_adaptive,raw,167,False,0.6,0.4,none,0.5,"[1.0, 1.0]",0.9447004608294931,0.9431818181818182,0.9880952380952381,0.9651162790697675,0.9422983479105927,0.9777780287667073

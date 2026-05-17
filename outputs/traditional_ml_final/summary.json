@@ -1,0 +1,41 @@
+{
+  "n_samples_in_labels": 1442,
+  "n_roi_files_found": 1442,
+  "binary_distribution": {
+    "0": 324,
+    "1": 1118
+  },
+  "level_distribution": {
+    "large": 540,
+    "medium": 379,
+    "none": 324,
+    "small": 199
+  },
+  "usable_samples": 1442,
+  "skipped_samples": [],
+  "feature_dim": 2730,
+  "feature_group_dims": {
+    "gray": 52,
+    "hsv": 40,
+    "edge": 39,
+    "line": 9,
+    "adaptive_line": 36,
+    "grid": 162,
+    "amount": 61,
+    "artifact": 41,
+    "pose_norm": 310,
+    "hog": 1980
+  },
+  "train_size": 1225,
+  "strict_train_size": 1009,
+  "strict_val_size": 216,
+  "test_size": 217,
+  "best_binary_model": "svm_rbf",
+  "best_level_model": "svm_rbf",
+  "best_binary_ensemble": null,
+  "best_level_ensemble": null,
+  "best_binary_strict": "stat_color_edge_adaptive_raw_svm0.60_xgb0.40",
+  "best_level_strict": "stat_color_edge_adaptive_raw_svm0.75_xgb0.25",
+  "best_level_ordinal": "ordinal_stat_color_edge_amount_artifact_raw_small_os_svm0.50_xgb0.50",
+  "elapsed_seconds": 1389.53
+}

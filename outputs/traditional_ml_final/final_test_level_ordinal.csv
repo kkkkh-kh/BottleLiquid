@@ -1,0 +1,2 @@
+﻿task,candidate,feature_set,selector,n_features,small_oversample,svm_weight,xgb_weight,calibration_type,class_bias,accuracy,macro_f1,weighted_f1,f1_none,f1_small,f1_medium,f1_large
+level_ordinal,ordinal_stat_color_edge_amount_artifact_raw_small_os_svm0.50_xgb0.50,stat_color_edge_amount_artifact,raw,233,True,0.5,0.5,class_bias,"[0.8999999761581421, 1.2000000476837158, 1.0, 1.100000023841858]",0.7695852534562212,0.7550725772765247,0.7719817496891229,0.7777777777777778,0.6857142857142857,0.7192982456140351,0.8375
