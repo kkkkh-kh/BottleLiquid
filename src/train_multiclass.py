@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from dataset import BottleLiquidDataset
 from model import build_resnet18_classifier
-from train_binary import build_eval_transform, build_train_transform, set_seed
+from train_binary import build_eval_transform, build_sampler, build_train_transform, print_dataset_summary, set_seed
 
 
 CLASS_NAMES = ["none", "small", "medium", "large"]
@@ -55,13 +55,35 @@ def train(args):
     print(f"Using device: {device}")
 
     train_dataset = BottleLiquidDataset(
-        args.image_dir, args.label_csv, args.train_txt, transform=build_train_transform(), label_col="liquid_class"
+        args.image_dir,
+        args.label_csv,
+        args.train_txt,
+        transform=build_train_transform(),
+        label_col="liquid_class",
+        metadata_cols=[args.domain_col],
+        max_samples=args.max_train_samples,
+        max_samples_per_class=args.max_train_samples_per_class,
+        seed=args.seed,
     )
     val_dataset = BottleLiquidDataset(
-        args.image_dir, args.label_csv, args.val_txt, transform=build_eval_transform(), label_col="liquid_class"
+        args.image_dir,
+        args.label_csv,
+        args.val_txt,
+        transform=build_eval_transform(),
+        label_col="liquid_class",
+        metadata_cols=[args.domain_col],
+        max_samples=args.max_val_samples,
+        max_samples_per_class=args.max_val_samples_per_class,
+        seed=args.seed,
     )
+    print_dataset_summary("Train", train_dataset, args.domain_col)
+    print_dataset_summary("Val", val_dataset, args.domain_col)
+    sampler = build_sampler(train_dataset, args)
+    if sampler is not None:
+        print(f"Using weighted sampler balanced by label and {args.domain_col}")
+
     train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+        train_dataset, batch_size=args.batch_size, shuffle=sampler is None, sampler=sampler, num_workers=args.num_workers,
         pin_memory=torch.cuda.is_available()
     )
     val_loader = DataLoader(
@@ -139,11 +161,35 @@ def parse_args():
     parser.add_argument("--no_freeze_backbone", action="store_false", dest="freeze_backbone")
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--max_train_samples", type=int, default=0, help="Use at most this many train samples. <=0 means all.")
+    parser.add_argument(
+        "--max_train_samples_per_class",
+        type=int,
+        default=0,
+        help="Use at most this many train samples per class. <=0 means all.",
+    )
+    parser.add_argument("--max_val_samples", type=int, default=0, help="Use at most this many val samples. <=0 means all.")
+    parser.add_argument(
+        "--max_val_samples_per_class",
+        type=int,
+        default=0,
+        help="Use at most this many val samples per class. <=0 means all.",
+    )
     parser.add_argument(
         "--early_stop_patience",
         type=int,
         default=8,
         help="Stop if validation macro F1 does not improve for this many epochs. Set <=0 to disable.",
+    )
+    parser.add_argument(
+        "--domain_col",
+        default="source_type",
+        help="Metadata column used for source/domain summaries and optional balanced sampling.",
+    )
+    parser.add_argument(
+        "--balance_domains",
+        action="store_true",
+        help="Use weighted sampling to balance both class labels and the selected domain_col.",
     )
     return parser.parse_args()
 

@@ -410,16 +410,16 @@ CPU 可以运行，但 YOLO 训练会比较慢；如果有 NVIDIA GPU，可以�
 ### 7.3 使用检测器裁剪统一 ROI
 
 ```powershell
-python src/detection/crop_roi_with_detector.py `
-  --image_dir data/model_dataset/roi_images `
-  --label_csv data/model_dataset/annotations/labels.csv `
-  --checkpoint outputs/bottle_detector/yolov8n_bottle/weights/best.pt `
-  --output_roi_dir data/detector_roi_dataset/roi_images `
-  --output_label_csv data/detector_roi_dataset/annotations/labels.csv `
-  --split_dir data/model_dataset/splits `
-  --output_split_dir data/detector_roi_dataset/splits `
-  --conf 0.25 `
-  --imgsz 640 `
+python src/detection/crop_roi_with_detector.py \
+  --image_dir data/model_dataset/roi_images \
+  --label_csv data/model_dataset/annotations/labels.csv \
+  --checkpoint outputs/bottle_detector/yolov8n_bottle/weights/best.pt \
+  --output_roi_dir data/detector_roi_dataset/roi_images \
+  --output_label_csv data/detector_roi_dataset/annotations/labels.csv \
+  --split_dir data/model_dataset/splits \
+  --output_split_dir data/detector_roi_dataset/splits \
+  --conf 0.25 \
+  --imgsz 640 \
   --expand_ratio 0.05
 ```
 
@@ -458,6 +458,22 @@ python src/train_multiclass.py `
   --val_txt data/detector_roi_dataset/splits/val.txt `
   --output_dir outputs/multiclass_resnet18_detector_roi
 ```
+
+如果需要控制输入样本量，可以在二分类或四分类训练时加入：
+
+```powershell
+--max_train_samples_per_class 300 `
+--max_val_samples_per_class 100
+```
+
+也可以控制总量：
+
+```powershell
+--max_train_samples 800 `
+--max_val_samples 200
+```
+
+训练开始时会打印实际使用的样本数和各类别数量。对于四分类增强数据，建议优先使用 `--max_train_samples_per_class`，避免新增 `none` 样本过多导致类别再次失衡。
 
 ## 8. 常见问题
 

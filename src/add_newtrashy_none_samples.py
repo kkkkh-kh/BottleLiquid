@@ -9,6 +9,7 @@ from PIL import Image
 
 
 IMAGE_EXTS = [".jpg", ".jpeg", ".png"]
+SPLIT_NAMES = ("train", "val", "test")
 
 
 def find_image(image_dir: Path, stem: str):
@@ -17,6 +18,17 @@ def find_image(image_dir: Path, stem: str):
         if path.exists():
             return path
     return None
+
+
+def yolo_bbox_to_box(values, width, height):
+    if len(values) != 4:
+        return None
+    x_center, y_center, box_w, box_h = [float(v) for v in values]
+    xmin = max(0, min(width - 1, int(round((x_center - box_w / 2) * width))))
+    ymin = max(0, min(height - 1, int(round((y_center - box_h / 2) * height))))
+    xmax = max(xmin + 1, min(width, int(round((x_center + box_w / 2) * width))))
+    ymax = max(ymin + 1, min(height, int(round((y_center + box_h / 2) * height))))
+    return xmin, ymin, xmax, ymax
 
 
 def polygon_to_box(values, width, height):
@@ -30,6 +42,16 @@ def polygon_to_box(values, width, height):
     xmax = max(xmin + 1, min(width, int(round(max(xs) * width))))
     ymax = max(ymin + 1, min(height, int(round(max(ys) * height))))
     return xmin, ymin, xmax, ymax
+
+
+def annotation_to_box(values, width, height, label_format):
+    if label_format == "bbox":
+        return yolo_bbox_to_box(values, width, height)
+    if label_format == "polygon":
+        return polygon_to_box(values, width, height)
+    if len(values) == 4:
+        return yolo_bbox_to_box(values, width, height)
+    return polygon_to_box(values, width, height)
 
 
 def collect_candidates(newtrashy_dir: Path):
@@ -52,7 +74,7 @@ def collect_candidates(newtrashy_dir: Path):
                 parts = line.split()
                 if len(parts) < 5:
                     continue
-                box = polygon_to_box(parts[1:], width, height)
+                box = annotation_to_box(parts[1:], width, height, collect_candidates.label_format)
                 if box is None:
                     continue
                 candidates.append(
@@ -65,6 +87,9 @@ def collect_candidates(newtrashy_dir: Path):
                     }
                 )
     return candidates
+
+
+collect_candidates.label_format = "auto"
 
 
 def crop_with_expand(image, box, expand_ratio):
@@ -81,16 +106,40 @@ def crop_with_expand(image, box, expand_ratio):
     return image.crop((left, top, right, bottom))
 
 
+def write_splits(base_split_dir: Path, output_split_dir: Path, new_filenames, add_to_split: str):
+    if add_to_split not in SPLIT_NAMES:
+        raise ValueError(f"--add_to_split must be one of {SPLIT_NAMES}, got: {add_to_split}")
+    if not base_split_dir.exists():
+        raise FileNotFoundError(f"Base split directory not found: {base_split_dir}")
+
+    output_split_dir.mkdir(parents=True, exist_ok=True)
+    for split in SPLIT_NAMES:
+        src = base_split_dir / f"{split}.txt"
+        if not src.exists():
+            raise FileNotFoundError(f"Base split file not found: {src}")
+        with src.open("r", encoding="utf-8") as f:
+            names = [line.strip() for line in f if line.strip()]
+        if split == add_to_split:
+            names.extend(new_filenames)
+        with (output_split_dir / f"{split}.txt").open("w", encoding="utf-8", newline="\n") as f:
+            for name in names:
+                f.write(f"{name}\n")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Add manually-approved newtrashy bottle ROIs as none class.")
+    parser = argparse.ArgumentParser(description="Add newtrashy bottle ROIs as none-class samples.")
     parser.add_argument("--base_label_csv", default="data/annotations/labels_multiclass_combined.csv")
     parser.add_argument("--base_roi_dir", default="data/combined_multiclass/roi_images")
+    parser.add_argument("--base_split_dir", default="", help="Optional base train/val/test split directory.")
     parser.add_argument("--newtrashy_dir", default="../newtrashy")
     parser.add_argument("--output_label_csv", default="data/annotations/labels_multiclass_combined_none_aug.csv")
     parser.add_argument("--output_roi_dir", default="data/combined_multiclass_none_aug/roi_images")
+    parser.add_argument("--output_split_dir", default="", help="Optional output split directory.")
     parser.add_argument("--num_samples", type=int, default=150)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--expand_ratio", type=float, default=0.05)
+    parser.add_argument("--label_format", choices=("auto", "bbox", "polygon"), default="auto")
+    parser.add_argument("--add_to_split", choices=SPLIT_NAMES, default="train")
     args = parser.parse_args()
 
     base_label_csv = Path(args.base_label_csv)
@@ -98,6 +147,8 @@ def main():
     newtrashy_dir = Path(args.newtrashy_dir)
     output_label_csv = Path(args.output_label_csv)
     output_roi_dir = Path(args.output_roi_dir)
+    base_split_dir = Path(args.base_split_dir) if args.base_split_dir else None
+    output_split_dir = Path(args.output_split_dir) if args.output_split_dir else None
 
     if not base_label_csv.exists():
         raise FileNotFoundError(f"Base label CSV not found: {base_label_csv}")
@@ -116,6 +167,7 @@ def main():
             raise FileNotFoundError(f"Base ROI image missing: {src}")
         shutil.copy2(src, output_roi_dir / filename)
 
+    collect_candidates.label_format = args.label_format
     candidates = collect_candidates(newtrashy_dir)
     if not candidates:
         raise ValueError(f"No usable polygon candidates found in: {newtrashy_dir}")
@@ -125,6 +177,7 @@ def main():
     selected = candidates[: min(args.num_samples, len(candidates))]
 
     new_rows = []
+    new_filenames = []
     for idx, item in enumerate(selected):
         with Image.open(item["image_path"]) as img:
             img = img.convert("RGB")
@@ -132,6 +185,7 @@ def main():
 
         output_name = f"newtrashy_none_{idx:04d}_{item['image_path'].stem}.jpg"
         roi.save(output_roi_dir / output_name)
+        new_filenames.append(output_name)
         new_rows.append(
             {
                 "filename": output_name,
@@ -150,6 +204,10 @@ def main():
 
     out_df = pd.concat([base_df, pd.DataFrame(new_rows)], ignore_index=True)
     out_df.to_csv(output_label_csv, index=False, quoting=csv.QUOTE_MINIMAL)
+    if base_split_dir is not None or output_split_dir is not None:
+        if base_split_dir is None or output_split_dir is None:
+            raise ValueError("--base_split_dir and --output_split_dir must be provided together.")
+        write_splits(base_split_dir, output_split_dir, new_filenames, args.add_to_split)
 
     print(f"Base rows copied: {len(base_df)}")
     print(f"Candidate bottle instances found: {len(candidates)}")
@@ -157,6 +215,8 @@ def main():
     print(f"Total rows: {len(out_df)}")
     print(f"Saved ROI images to: {output_roi_dir}")
     print(f"Saved labels to: {output_label_csv}")
+    if output_split_dir is not None:
+        print(f"Saved splits to: {output_split_dir}; added new samples to {args.add_to_split}.txt")
 
 
 if __name__ == "__main__":

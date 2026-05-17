@@ -14,6 +14,7 @@ from sklearn.metrics import (
 from torch.utils.data import DataLoader
 
 from dataset import BottleLiquidDataset
+from metrics_utils import write_group_metrics
 from model import build_resnet18_binary
 from train_binary import build_eval_transform
 
@@ -40,7 +41,11 @@ def evaluate(args):
     print(f"Using device: {device}")
 
     dataset = BottleLiquidDataset(
-        args.image_dir, args.label_csv, args.test_txt, transform=build_eval_transform()
+        args.image_dir,
+        args.label_csv,
+        args.test_txt,
+        transform=build_eval_transform(),
+        metadata_cols=[args.domain_col],
     )
     loader = DataLoader(
         dataset,
@@ -56,6 +61,7 @@ def evaluate(args):
 
     y_true = []
     y_pred = []
+    domains = []
     rows = []
 
     with torch.no_grad():
@@ -68,11 +74,14 @@ def evaluate(args):
             for filename, true_label, pred_label, prob in zip(filenames, labels, preds, probs):
                 true_int = int(true_label)
                 pred_int = int(pred_label)
+                domain = dataset.metadata_for(filename, args.domain_col)
                 y_true.append(true_int)
                 y_pred.append(pred_int)
+                domains.append(domain)
                 rows.append(
                     [
                         filename,
+                        domain,
                         true_int,
                         pred_int,
                         float(prob[0]),
@@ -105,9 +114,13 @@ def evaluate(args):
     result_path = output_dir / "test_result.csv"
     with result_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["filename", "true_label", "pred_label", "prob_no_liquid", "prob_has_liquid"])
+        writer.writerow(["filename", args.domain_col, "true_label", "pred_label", "prob_no_liquid", "prob_has_liquid"])
         writer.writerows(rows)
     print(f"Saved per-sample results to {result_path}")
+
+    domain_path = output_dir / f"test_metrics_by_{args.domain_col}.csv"
+    write_group_metrics(y_true, y_pred, domains, domain_path, average="binary")
+    print(f"Saved grouped metrics to {domain_path}")
 
 
 def parse_args():
@@ -119,6 +132,11 @@ def parse_args():
     parser.add_argument("--output_dir", default="outputs/binary_resnet18")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument(
+        "--domain_col",
+        default="source_type",
+        help="Metadata column used to write grouped domain/source metrics.",
+    )
     return parser.parse_args()
 
 
